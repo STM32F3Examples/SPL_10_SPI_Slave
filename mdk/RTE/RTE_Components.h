@@ -3,7 +3,7 @@
  * Auto generated Run-Time-Environment Component Configuration File
  *      *** Do not modify ! ***
  *
- * Project: 'SPL_08_SPI_STM32F3' 
+ * Project: 'SPL_10_SPI_Slave_STM32F3' 
  * Target:  'Target 1' 
  */
 
