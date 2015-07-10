@@ -6,6 +6,8 @@
 
 void delay_ms(int delay_time);
 void led_init(void);
+void spi_master_init(void);
+uint16_t spi_xfer(uint16_t tx_data);
 
 Serial_t USART1_Serial={USART1_getChar,USART1_sendChar};
 Serial_t USART2_Serial={USART2_getChar,USART2_sendChar};
@@ -13,22 +15,30 @@ Serial_t USART2_Serial={USART2_getChar,USART2_sendChar};
 char mybf[80];/*Input buffer*/
 char wordBuffer[80];
 
+#define DAC_CONF	(0x3<<12) 
+
+unsigned short dac_val=0x8FF;
+unsigned short receivedData=0xFFFF;
 int main(){
 	int lineCounter=1;
-	led_init();
+	//led_init();
 	USART2_init(9600);
 	serial_puts(USART2_Serial,"\nSystem ready\n");
+	spi_master_init();
+	
 	while(1){
 		serial_printf(USART2_Serial,"%d$ ",lineCounter);
 		serial_gets(USART2_Serial,mybf,80);
 		serial_printf(USART2_Serial,"%s\n",mybf);
-		if(sscanf(mybf,"%s",wordBuffer) > 0){
-			serial_printf(USART2_Serial,"word: %s\n",wordBuffer);
-			serial_printf(USART2_Serial,"characters: %d\n",strlen(wordBuffer));
+		if(sscanf(mybf,"%hx",&dac_val) > 0){
+			dac_val&=0xFFF;
+			receivedData=spi_xfer((DAC_CONF|dac_val));
+			serial_printf(USART2_Serial,"new dac value = 0x%03hX\n",dac_val);
+			serial_printf(USART2_Serial,"received value = 0x%04hX\n",receivedData);
 		}
 		lineCounter++;
+		delay_ms(0xFFFFF);
 	}
-	return 0;
 }
 
 
@@ -47,4 +57,52 @@ void led_init(void){
 
 void delay_ms(int delay_time){
 	for(int i=0; i<delay_time; i++);
+}
+
+/* SPI1
+ * PB12=NSS PB13=SCK PB14=MISO PB15=MOSI*/
+void spi_master_init(void){
+	
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOB,ENABLE);
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_SPI2 ,ENABLE);
+	
+	GPIO_InitTypeDef myGPIO;
+	GPIO_StructInit(&myGPIO);
+	myGPIO.GPIO_Pin=GPIO_Pin_12|GPIO_Pin_13|GPIO_Pin_14|GPIO_Pin_15;
+	myGPIO.GPIO_Mode=GPIO_Mode_AF;
+	myGPIO.GPIO_OType=GPIO_OType_PP;
+	myGPIO.GPIO_Speed=GPIO_Speed_10MHz;
+	myGPIO.GPIO_PuPd=GPIO_PuPd_NOPULL;
+	GPIO_Init(GPIOB,&myGPIO);
+	
+	/*Remap pins to SPI2*/
+	GPIO_PinAFConfig(GPIOB,GPIO_PinSource12,GPIO_AF_5);
+	GPIO_PinAFConfig(GPIOB,GPIO_PinSource13,GPIO_AF_5);
+	GPIO_PinAFConfig(GPIOB,GPIO_PinSource14,GPIO_AF_5);
+	GPIO_PinAFConfig(GPIOB,GPIO_PinSource15,GPIO_AF_5);
+	
+	SPI_InitTypeDef mySPI;
+	SPI_StructInit(&mySPI);
+	mySPI.SPI_Mode=SPI_Mode_Master;
+	mySPI.SPI_BaudRatePrescaler=SPI_BaudRatePrescaler_128;//16MHz/128=12.5KHz
+	mySPI.SPI_Direction=SPI_Direction_2Lines_FullDuplex;
+	mySPI.SPI_DataSize=SPI_DataSize_16b;
+	mySPI.SPI_CPOL = SPI_CPOL_Low;//Clock steady state = low
+	mySPI.SPI_CPHA = SPI_CPHA_1Edge;//CPHA=0;
+	mySPI.SPI_NSS = SPI_NSS_Hard;	
+	mySPI.SPI_FirstBit=SPI_FirstBit_MSB;
+	SPI_Init(SPI2,&mySPI);
+	SPI_SSOutputCmd(SPI2,ENABLE);//SSOE = 1
+}
+
+uint16_t spi_xfer(uint16_t tx_data){
+	uint16_t rx_data;
+	SPI_Cmd(SPI2,ENABLE);
+	SPI_I2S_SendData16(SPI2,tx_data);
+	while(!SPI_I2S_GetFlagStatus(SPI2,SPI_I2S_FLAG_TXE));//Wait until tx buffer empty
+	while(!SPI_I2S_GetFlagStatus(SPI2,SPI_I2S_FLAG_RXNE));//Wait until rx buffer full
+	rx_data=SPI_I2S_ReceiveData16(SPI2);
+	while(SPI_I2S_GetFlagStatus(SPI2,SPI_I2S_FLAG_BSY));//Wait until transactions completed
+	SPI_Cmd(SPI2,DISABLE);//
+	return rx_data;
 }
