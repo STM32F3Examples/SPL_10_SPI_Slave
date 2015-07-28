@@ -1,5 +1,8 @@
-/gcc/nbproject/
-/gcc/objects/
+/gcc/nbproject
+/gcc/objects
 /gcc/salida.elf
-/mdk/Listings
-/mdk/Objects/
+/mdk/*
+
+!/mdk/*.uvprojx
+!/mdk/*.uvoptx
+!/mdk/RTE

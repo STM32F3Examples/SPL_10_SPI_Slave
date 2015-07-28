@@ -17,27 +17,20 @@ char wordBuffer[80];
 
 #define DAC_CONF	(0x3<<12) 
 
-unsigned short dac_val=0x8FF;
-unsigned short receivedData=0xFFFF;
+unsigned short adc_val=0;
+unsigned short receivedData=0;
 int main(){
 	int lineCounter=1;
 	//led_init();
 	USART2_init(9600);
 	serial_puts(USART2_Serial,"\nSystem ready\n");
 	spi_master_init();
-	
 	while(1){
-		serial_printf(USART2_Serial,"%d$ ",lineCounter);
-		serial_gets(USART2_Serial,mybf,80);
-		serial_printf(USART2_Serial,"%s\n",mybf);
-		if(sscanf(mybf,"%hx",&dac_val) > 0){
-			dac_val&=0xFFF;
-			receivedData=spi_xfer((DAC_CONF|dac_val));
-			serial_printf(USART2_Serial,"new dac value = 0x%03hX\n",dac_val);
-			serial_printf(USART2_Serial,"received value = 0x%04hX\n",receivedData);
-		}
+		receivedData=spi_xfer(adc_val);
+		serial_printf(USART2_Serial,"transmitted data= 0x%03hX\n",adc_val);
+		serial_printf(USART2_Serial,"received data = 0x%04hX\n",receivedData);
 		lineCounter++;
-		delay_ms(0xFFFFF);
+		adc_val=lineCounter;
 	}
 }
 
@@ -83,7 +76,7 @@ void spi_master_init(void){
 	
 	SPI_InitTypeDef mySPI;
 	SPI_StructInit(&mySPI);
-	mySPI.SPI_Mode=SPI_Mode_Master;
+	mySPI.SPI_Mode=SPI_Mode_Slave;
 	mySPI.SPI_BaudRatePrescaler=SPI_BaudRatePrescaler_128;//16MHz/128=12.5KHz
 	mySPI.SPI_Direction=SPI_Direction_2Lines_FullDuplex;
 	mySPI.SPI_DataSize=SPI_DataSize_16b;
